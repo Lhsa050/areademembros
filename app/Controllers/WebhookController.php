@@ -143,40 +143,72 @@ class WebhookController
             json_response(['error' => 'Customer email required'], 400);
         }
 
+        $productGroups = $this->resolveCartPandaProductGroups($order, (int) $product['funnel_id'], $product);
+        $accessProducts = $productGroups['access'];
+        $purchasedProducts = $productGroups['purchased'];
+
+        if (empty($accessProducts)) {
+            WebhookLog::markError($logId, '[CartPanda] Nenhum produto comprado encontrado no payload. Produto token=' . (int) $product['id']);
+            json_response(['error' => 'No matching products found'], 200);
+        }
+
         // Processa evento
         switch ($event) {
             case 'order.created':
-                $this->saveCartPandaOrderStatus($payload, $product, $email, 'pending');
+                foreach ($accessProducts as $accessProduct) {
+                    $this->saveCartPandaOrderStatus($payload, $accessProduct, $email, 'pending');
+                }
                 WebhookLog::markProcessed($logId);
                 break;
 
             case 'order.paid':
-                $member = $this->handleApproved($email, $name, $cpf, $phone, $product, $logId);
-                $this->saveCartPandaOrderStatus($payload, $product, $email, 'paid', $member);
-                $this->safeFiscal(fn() => (new FiscalService())->recordProductSaleFromWebhook($payload, $product, $member, $source, $event));
+                $memberForFiscal = null;
+                foreach ($accessProducts as $accessProduct) {
+                    $memberForFiscal = $this->handleApproved($email, $name, $cpf, $phone, $accessProduct, $logId);
+                    $this->saveCartPandaOrderStatus($payload, $accessProduct, $email, 'paid', $memberForFiscal);
+                }
+
+                if ($memberForFiscal) {
+                    foreach ($purchasedProducts as $purchasedProduct) {
+                        $this->safeFiscal(fn() => (new FiscalService())->recordProductSaleFromWebhook($payload, $purchasedProduct, $memberForFiscal, $source, $event));
+                    }
+                }
                 break;
 
             case 'order.cancelled':
-                $this->saveCartPandaOrderStatus($payload, $product, $email, 'cancelled');
+                foreach ($accessProducts as $accessProduct) {
+                    $this->saveCartPandaOrderStatus($payload, $accessProduct, $email, 'cancelled');
+                }
                 WebhookLog::markProcessed($logId);
                 break;
 
             case 'order.refunded':
                 if (!$this->isRealCartPandaRefund($order)) {
-                    $this->saveCartPandaOrderStatus($payload, $product, $email, 'cancelled');
+                    foreach ($accessProducts as $accessProduct) {
+                        $this->saveCartPandaOrderStatus($payload, $accessProduct, $email, 'cancelled');
+                    }
                     WebhookLog::markProcessed($logId);
                     break;
                 }
 
-                $member = Member::findByEmail($email, (int) $product['funnel_id']);
-                $orderRecord = $this->saveCartPandaOrderStatus($payload, $product, $email, 'refunded', $member);
+                $shouldRecordFiscalRefunds = false;
+                foreach ($accessProducts as $accessProduct) {
+                    $member = Member::findByEmail($email, (int) $accessProduct['funnel_id']);
+                    $orderRecord = $this->saveCartPandaOrderStatus($payload, $accessProduct, $email, 'refunded', $member);
 
-                if (MemberProductOrder::wasPaid($orderRecord)) {
-                    $this->safeFiscal(fn() => (new FiscalService())->recordRefundFromWebhook($payload, $product, null, $source, $email));
-                    $this->handleCartPandaRefunded($email, $product, $this->extractCartPandaOrderId($order, $email, (int) $product['id']), $logId);
-                } else {
-                    WebhookLog::markProcessed($logId);
+                    if (MemberProductOrder::wasPaid($orderRecord)) {
+                        $shouldRecordFiscalRefunds = true;
+                        $this->handleCartPandaRefunded($email, $accessProduct, $this->extractCartPandaOrderId($order, $email, (int) $accessProduct['id']), $logId);
+                    }
                 }
+
+                if ($shouldRecordFiscalRefunds) {
+                    foreach ($purchasedProducts as $purchasedProduct) {
+                        $this->safeFiscal(fn() => (new FiscalService())->recordRefundFromWebhook($payload, $purchasedProduct, null, $source, $email));
+                    }
+                }
+
+                WebhookLog::markProcessed($logId);
                 break;
 
             default:
@@ -288,11 +320,8 @@ class WebhookController
                 continue;
             }
 
-            foreach ([$item['product_id'] ?? null, $item['id'] ?? null] as $candidate) {
-                $value = $this->scalarText($candidate);
-                if ($value !== '') {
-                    return $value;
-                }
+            foreach ($this->cartPandaLineItemCandidates($item) as $candidate) {
+                return $candidate;
             }
         }
 
@@ -768,24 +797,12 @@ class WebhookController
         }
 
         $funnelId = (int) $funnel['id'];
-
-        // 1. Sempre liberar produtos marcados como 'principal' ou 'bonus'
-        $coreProducts = Product::getByRoleInFunnel($funnelId, ['principal', 'bonus']);
-
-        // 2. Extrai orderbumps dos line_items (produtos com role='orderbump' ou sem role)
-        $matchedOrderBumps = $this->matchLineItemsToProducts($order, $funnelId);
-
-        // Merge: core + orderbumps (sem duplicatas)
-        $matchedProducts = $coreProducts;
-        $existingIds = array_map(fn($p) => (int) $p['id'], $coreProducts);
-        foreach ($matchedOrderBumps as $bump) {
-            if (!in_array((int) $bump['id'], $existingIds, true)) {
-                $matchedProducts[] = $bump;
-            }
-        }
+        $productGroups = $this->resolveCartPandaProductGroups($order, $funnelId);
+        $matchedProducts = $productGroups['access'];
+        $purchasedProducts = $productGroups['purchased'];
 
         if (empty($matchedProducts)) {
-            WebhookLog::markError($logId, '[Funil] Nenhum produto principal/bonus/orderbump encontrado. Funil ID=' . $funnelId);
+            WebhookLog::markError($logId, '[Funil] Nenhum produto comprado encontrado no payload. Funil ID=' . $funnelId);
             json_response(['error' => 'No matching products found'], 200);
         }
 
@@ -804,7 +821,12 @@ class WebhookController
                 foreach ($matchedProducts as $product) {
                     $memberForFiscal = $this->handleApproved($email, $name, $cpf, $phone, $product, $logId);
                     $this->saveCartPandaOrderStatus($payload, $product, $email, 'paid', $memberForFiscal);
-                    $this->safeFiscal(fn() => (new FiscalService())->recordProductSaleFromWebhook($payload, $product, $memberForFiscal, 'cartpanda', $event));
+                }
+
+                if ($memberForFiscal) {
+                    foreach ($purchasedProducts as $purchasedProduct) {
+                        $this->safeFiscal(fn() => (new FiscalService())->recordProductSaleFromWebhook($payload, $purchasedProduct, $memberForFiscal, 'cartpanda', $event));
+                    }
                 }
                 break;
 
@@ -833,7 +855,9 @@ class WebhookController
                 }
 
                 if ($shouldRecordFiscalRefund) {
-                    $this->safeFiscal(fn() => (new FiscalService())->recordRefundFromWebhook($payload, null, null, 'cartpanda', $email));
+                    foreach ($purchasedProducts as $purchasedProduct) {
+                        $this->safeFiscal(fn() => (new FiscalService())->recordRefundFromWebhook($payload, $purchasedProduct, null, 'cartpanda', $email));
+                    }
                 }
 
                 WebhookLog::markProcessed($logId);
@@ -904,6 +928,78 @@ class WebhookController
         }
     }
 
+    private function resolveCartPandaProductGroups(array $order, int $funnelId, ?array $fallbackProduct = null): array
+    {
+        $purchasedProducts = $this->matchLineItemsToProducts($order, $funnelId);
+
+        if (empty($purchasedProducts) && $fallbackProduct) {
+            $purchasedProducts = [$fallbackProduct];
+        }
+
+        $purchasedProducts = $this->uniqueProducts($purchasedProducts);
+
+        return [
+            'purchased' => $purchasedProducts,
+            'access' => $this->expandCartPandaAccessProducts($purchasedProducts, $funnelId),
+        ];
+    }
+
+    private function expandCartPandaAccessProducts(array $purchasedProducts, int $funnelId): array
+    {
+        if (empty($purchasedProducts)) {
+            return [];
+        }
+
+        $accessProducts = $purchasedProducts;
+        $grantsBonus = false;
+
+        foreach ($purchasedProducts as $product) {
+            if ($this->cartPandaPurchaseGrantsBonuses($product)) {
+                $grantsBonus = true;
+                break;
+            }
+        }
+
+        if ($grantsBonus) {
+            $accessProducts = array_merge($accessProducts, Product::getByRoleInFunnel($funnelId, ['bonus']));
+        }
+
+        return $this->uniqueProducts($accessProducts);
+    }
+
+    private function cartPandaPurchaseGrantsBonuses(array $product): bool
+    {
+        $role = strtolower(trim((string) ($product['funnel_role'] ?? '')));
+
+        if ($role === 'orderbump' || $role === 'bonus') {
+            return false;
+        }
+
+        return $role === 'principal' || $role === '';
+    }
+
+    private function uniqueProducts(array $products): array
+    {
+        $unique = [];
+        $seen = [];
+
+        foreach ($products as $product) {
+            if (!is_array($product) || !isset($product['id'])) {
+                continue;
+            }
+
+            $id = (int) $product['id'];
+            if (isset($seen[$id])) {
+                continue;
+            }
+
+            $unique[] = $product;
+            $seen[$id] = true;
+        }
+
+        return $unique;
+    }
+
     /**
      * Extrai line_items do payload CartPanda e faz match com produtos do funil
      * via external_product_id global do produto.
@@ -929,16 +1025,12 @@ class WebhookController
                 continue;
             }
 
-            foreach (['product_id', 'id', 'variant_id', 'sku'] as $field) {
-                $value = $this->scalarText($item[$field] ?? null);
-                if ($value !== '') {
-                    $candidates[$value] = true;
-                }
+            foreach ($this->cartPandaLineItemCandidates($item) as $value) {
+                $candidates[$value] = true;
             }
 
             // Guarda nome para fallback
-            $itemName = $this->scalarText($item['name'] ?? ($item['title'] ?? ''));
-            if ($itemName !== '') {
+            foreach ($this->cartPandaLineItemNames($item) as $itemName) {
                 $lineItemNames[] = strtolower($itemName);
             }
         }
@@ -993,5 +1085,84 @@ class WebhookController
         }
 
         return $matchedProducts;
+    }
+
+    private function cartPandaLineItemCandidates(array $item): array
+    {
+        $paths = [
+            ['product_id'],
+            ['external_product_id'],
+            ['product_external_id'],
+            ['external_id'],
+            ['cartpanda_product_id'],
+            ['variant_id'],
+            ['sku'],
+            ['offer_id'],
+            ['id'],
+            ['item_id'],
+            ['product', 'id'],
+            ['product', 'product_id'],
+            ['product', 'external_product_id'],
+            ['product', 'external_id'],
+            ['product', 'sku'],
+            ['product', 'code'],
+            ['variant', 'id'],
+            ['variant', 'variant_id'],
+            ['variant', 'external_product_id'],
+            ['variant', 'external_id'],
+            ['variant', 'sku'],
+            ['offer', 'id'],
+            ['offer', 'external_product_id'],
+            ['offer', 'external_id'],
+            ['offer', 'sku'],
+        ];
+
+        $values = [];
+        foreach ($paths as $path) {
+            $value = $this->nestedScalarText($item, $path);
+            if ($value !== '') {
+                $values[$value] = true;
+            }
+        }
+
+        return array_keys($values);
+    }
+
+    private function cartPandaLineItemNames(array $item): array
+    {
+        $paths = [
+            ['name'],
+            ['title'],
+            ['product_name'],
+            ['product', 'name'],
+            ['product', 'title'],
+            ['variant', 'name'],
+            ['variant', 'title'],
+        ];
+
+        $values = [];
+        foreach ($paths as $path) {
+            $value = $this->nestedScalarText($item, $path);
+            if ($value !== '') {
+                $values[$value] = true;
+            }
+        }
+
+        return array_keys($values);
+    }
+
+    private function nestedScalarText(array $data, array $path): string
+    {
+        $value = $data;
+
+        foreach ($path as $key) {
+            if (!is_array($value) || !array_key_exists($key, $value)) {
+                return '';
+            }
+
+            $value = $value[$key];
+        }
+
+        return $this->scalarText($value);
     }
 }

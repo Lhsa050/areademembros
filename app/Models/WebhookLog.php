@@ -86,10 +86,83 @@ class WebhookLog extends BaseModel
             'refunded_at' => $payload['order']['payment']['refunded_at'] ?? null,
         ];
 
+        $lineItems = self::compactLineItems($payload['order']['line_items'] ?? []);
+        if (!empty($lineItems)) {
+            $summary['line_items'] = $lineItems;
+        }
+
         $summary = array_filter($summary, static fn($value) => $value !== null && $value !== '');
         $encoded = json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         return $encoded !== false ? $encoded : '{"_compact":true}';
+    }
+
+    private static function compactLineItems($items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $summary = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $lineItem = array_filter([
+                'id' => self::scalarText($item['id'] ?? null),
+                'product_id' => self::scalarText($item['product_id'] ?? null),
+                'external_product_id' => self::scalarText($item['external_product_id'] ?? null),
+                'variant_id' => self::scalarText($item['variant_id'] ?? null),
+                'sku' => self::scalarText($item['sku'] ?? null),
+                'offer_id' => self::scalarText($item['offer_id'] ?? null),
+                'name' => self::scalarText($item['name'] ?? ($item['title'] ?? null)),
+                'product' => self::compactNestedLineItem($item['product'] ?? null),
+                'variant' => self::compactNestedLineItem($item['variant'] ?? null),
+                'offer' => self::compactNestedLineItem($item['offer'] ?? null),
+            ], static fn($value) => $value !== null && $value !== '' && $value !== []);
+
+            if (empty($lineItem)) {
+                continue;
+            }
+
+            $summary[] = $lineItem;
+
+            if (count($summary) >= 10) {
+                break;
+            }
+        }
+
+        return $summary;
+    }
+
+    private static function compactNestedLineItem($value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return array_filter([
+            'id' => self::scalarText($value['id'] ?? null),
+            'product_id' => self::scalarText($value['product_id'] ?? null),
+            'external_product_id' => self::scalarText($value['external_product_id'] ?? null),
+            'external_id' => self::scalarText($value['external_id'] ?? null),
+            'sku' => self::scalarText($value['sku'] ?? null),
+            'name' => self::scalarText($value['name'] ?? ($value['title'] ?? null)),
+        ], static fn($item) => $item !== '');
+    }
+
+    private static function scalarText($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_scalar($value)) {
+            return trim((string) $value);
+        }
+
+        return '';
     }
 
     /**

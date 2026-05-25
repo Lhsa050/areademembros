@@ -196,7 +196,9 @@ class Product extends BaseModel
                         fp.webhook_token AS linked_webhook_token,
                         fp.sort_order AS linked_sort_order,
                         fp.release_days AS linked_release_days,
-                        fp.is_public AS linked_is_public
+                        fp.is_public AS linked_is_public,
+                        fp.external_product_id AS linked_external_product_id,
+                        fp.funnel_role
                  FROM funnel_products fp
                  INNER JOIN products p ON p.id = fp.product_id
                  WHERE fp.webhook_token = ?",
@@ -208,10 +210,16 @@ class Product extends BaseModel
             }
         }
 
-        return Database::fetch(
+        $product = Database::fetch(
             "SELECT * FROM products WHERE webhook_token = ?",
             [$token]
         );
+
+        if ($product && self::supportsFunnelProducts() && !empty($product['funnel_id'])) {
+            return self::findForFunnel((int) $product['id'], (int) $product['funnel_id']) ?? $product;
+        }
+
+        return $product;
     }
 
     /**
@@ -273,7 +281,8 @@ class Product extends BaseModel
                     fp.sort_order AS linked_sort_order,
                     fp.release_days AS linked_release_days,
                     fp.is_public AS linked_is_public,
-                    fp.external_product_id AS linked_external_product_id
+                    fp.external_product_id AS linked_external_product_id,
+                    fp.funnel_role
              FROM funnel_products fp
              INNER JOIN products p ON p.id = fp.product_id
              WHERE fp.funnel_id = ?
