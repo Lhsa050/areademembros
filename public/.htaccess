@@ -1,0 +1,58 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redireciona para index.php se não for arquivo existente
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    # Aumentar limites de upload
+    php_value upload_max_filesize 512M
+    php_value post_max_size 512M
+    php_value memory_limit 512M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Compressão Gzip — reduz tamanho das respostas em ~70%
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE text/javascript
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Cache de assets estáticos — browser guarda por 30 dias
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/gif "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    ExpiresByType application/x-font-woff2 "access plus 30 days"
+    ExpiresByType font/woff2 "access plus 30 days"
+</IfModule>
+
+# Cache-Control headers
+<IfModule mod_headers.c>
+    # Assets estáticos
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|css|js|woff2)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+    
+    # Páginas HTML não cachear no browser (cache é server-side)
+    <FilesMatch "\.(php|html)$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+</IfModule>
+
+# Segurança
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
