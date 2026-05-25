@@ -2,14 +2,13 @@
 /**
  * View: Dashboard do Membro (com suporte a traduções)
  */
-$title = __('my_products');
+$title = 'Produtos liberados';
 ob_start();
 
-$autoOrganize = !empty($funnel['auto_organize']);
-if ($autoOrganize) {
-    $myProducts = array_filter($products, fn($p) => $p['unlocked']);
-    $otherProducts = array_filter($products, fn($p) => !$p['unlocked']);
-}
+$unlockedProducts = array_values(array_filter($products, static fn($p) => !empty($p['has_member_access']) || !empty($p['unlocked'])));
+$orderBumpProducts = array_values(array_filter($products, static function ($p) {
+    return empty($p['has_member_access']) && empty($p['unlocked']) && ($p['funnel_role'] ?? '') === 'orderbump';
+}));
 ?>
 
 <div style="margin-bottom: 32px;">
@@ -17,52 +16,46 @@ if ($autoOrganize) {
     <p class="page-subtitle"><?= __('check_products') ?></p>
 </div>
 
-<?php if (empty($products)): ?>
+<?php if (empty($products) || (empty($unlockedProducts) && empty($orderBumpProducts))): ?>
     <div class="empty-state">
         <?= icon('package', 'width:48px;height:48px;') ?>
         <h3 style="font-size:1.125rem;font-weight:600;color:var(--gray-600);margin-top:12px;"><?= __('no_products') ?></h3>
         <p style="font-size:0.875rem;color:var(--gray-400);margin-top:8px;"><?= __('no_products_desc') ?></p>
     </div>
-<?php elseif ($autoOrganize): ?>
-    <!-- Meus Produtos -->
-    <?php if (!empty($myProducts)): ?>
+<?php else: ?>
+    <!-- Produtos liberados -->
+    <?php if (!empty($unlockedProducts)): ?>
     <div style="margin-bottom:40px;">
         <h2 style="font-size:1.125rem; font-weight:700; color:var(--gray-800); margin-bottom:16px; display:flex; align-items:center; gap:8px;">
             <?= icon('check-circle', 'width:20px;height:20px;color:var(--brand-500);') ?>
-            <?= __('my_products') ?>
+            Produtos liberados
         </h2>
         <div class="products-grid">
-            <?php foreach ($myProducts as $product): ?>
+            <?php foreach ($unlockedProducts as $product): ?>
                 <?php include __DIR__ . '/_product_card.php'; ?>
             <?php endforeach; ?>
         </div>
     </div>
     <?php endif; ?>
 
-    <!-- Produtos Recomendados -->
-    <?php if (!empty($otherProducts)): ?>
+    <!-- Order bumps -->
+    <?php if (!empty($orderBumpProducts)): ?>
     <div>
         <h2 style="font-size:1.125rem; font-weight:700; color:var(--gray-800); margin-bottom:16px; display:flex; align-items:center; gap:8px;">
-            <?= icon('sparkles', 'width:20px;height:20px;color:#f59e0b;') ?>
-            <?= __('recommended_products') ?>
+            <?= icon('shopping-cart', 'width:20px;height:20px;color:#f59e0b;') ?>
+            Adquira tambem
         </h2>
-        <div class="products-grid">
-            <?php foreach ($otherProducts as $product): ?>
+        <div class="products-grid" id="upsell-products-grid">
+            <?php foreach ($orderBumpProducts as $product): ?>
                 <?php include __DIR__ . '/_product_card.php'; ?>
             <?php endforeach; ?>
         </div>
     </div>
     <?php endif; ?>
-<?php else: ?>
-    <div class="products-grid">
-        <?php foreach ($products as $product): ?>
-            <?php include __DIR__ . '/_product_card.php'; ?>
-        <?php endforeach; ?>
-    </div>
 <?php endif; ?>
 
 <!-- Offers Injection & Improved Popup -->
-<div id="upsell-container"></div>
+<div id="upsell-container"<?= empty($orderBumpProducts) ? '' : ' style="display:none;"' ?>></div>
 
 <!-- Improved Upsell Popup Template (Hidden by default) -->
 <div id="upsell-overlay" class="upsell-overlay" aria-hidden="true">
@@ -458,8 +451,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createOfferCard(o) {
-        const grid = document.querySelector('.products-grid') || document.querySelector('#upsell-container');
-        if (!grid) return;
+        const targetGrid = document.querySelector('#upsell-products-grid') || ensureUpsellGrid();
+        if (!targetGrid) return;
         
         const card = document.createElement('a');
         const title = escapeHtml(o.title || 'Oferta especial');
@@ -501,18 +494,32 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         
-        // Find the "Recommended Products" grid if it exists, otherwise just prepend to the first available grid
-        let targetGrid = grid;
-        const allGrids = document.querySelectorAll('.products-grid');
-        if (allGrids.length > 1) {
-            targetGrid = allGrids[1]; // The second grid is typically "Outros Produtos Recomendados"
-        }
-        
         targetGrid.prepend(card);
         
         if (window.lucide && window.lucide.createIcons) {
             window.lucide.createIcons({ root: card });
         }
+    }
+
+    function ensureUpsellGrid() {
+        const container = document.querySelector('#upsell-container');
+        if (!container) return null;
+
+        container.innerHTML = `
+            <div>
+                <h2 style="font-size:1.125rem; font-weight:700; color:var(--gray-800); margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="shopping-cart" style="width:20px;height:20px;color:#f59e0b;"></i>
+                    Adquira tambem
+                </h2>
+                <div class="products-grid" id="upsell-products-grid"></div>
+            </div>
+        `;
+
+        if (window.lucide && window.lucide.createIcons) {
+            window.lucide.createIcons({ root: container });
+        }
+
+        return container.querySelector('#upsell-products-grid');
     }
     
     function showOfferPopup(o) {

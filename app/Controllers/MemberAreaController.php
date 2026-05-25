@@ -116,7 +116,9 @@ class MemberAreaController
 
         foreach ($allProducts as &$product) {
             $isPublic = !empty($product['is_public']);
-            $product['unlocked'] = $isPublic || in_array((int) $product['id'], $memberProductIds, true);
+            $hasMemberAccess = $isPublic || in_array((int) $product['id'], $memberProductIds, true);
+            $product['has_member_access'] = $hasMemberAccess;
+            $product['unlocked'] = $hasMemberAccess;
             $product['direct_access'] = false;
             
             // Verifica release_days para produtos desbloqueados
