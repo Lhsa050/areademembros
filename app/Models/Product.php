@@ -34,7 +34,7 @@ class Product extends BaseModel
                         fp.sort_order AS linked_sort_order,
                         fp.release_days AS linked_release_days,
                         fp.is_public AS linked_is_public,
-                        fp.external_product_id,
+                        fp.external_product_id AS linked_external_product_id,
                         fp.funnel_role
                  FROM funnel_products fp
                  INNER JOIN products p ON p.id = fp.product_id
@@ -160,7 +160,7 @@ class Product extends BaseModel
                         sort_order AS linked_sort_order,
                         release_days AS linked_release_days,
                         is_public AS linked_is_public,
-                        external_product_id,
+                        external_product_id AS linked_external_product_id,
                         funnel_role
                  FROM funnel_products
                  WHERE funnel_id = ? AND product_id = ?",
@@ -232,11 +232,20 @@ class Product extends BaseModel
                     fp.webhook_token AS linked_webhook_token,
                     fp.sort_order AS linked_sort_order,
                     fp.release_days AS linked_release_days,
-                    fp.is_public AS linked_is_public
+                    fp.is_public AS linked_is_public,
+                    fp.external_product_id AS linked_external_product_id,
+                    fp.funnel_role
              FROM funnel_products fp
              INNER JOIN products p ON p.id = fp.product_id
-             WHERE fp.funnel_id = ? AND fp.external_product_id = ?",
-            [$funnelId, $externalId]
+             WHERE fp.funnel_id = ?
+               AND (
+                   p.external_product_id = ?
+                   OR (
+                       (p.external_product_id IS NULL OR p.external_product_id = '')
+                       AND fp.external_product_id = ?
+                   )
+               )",
+            [$funnelId, $externalId, $externalId]
         );
 
         return $linked ? self::applyFunnelLink($linked) : null;
@@ -264,11 +273,18 @@ class Product extends BaseModel
                     fp.sort_order AS linked_sort_order,
                     fp.release_days AS linked_release_days,
                     fp.is_public AS linked_is_public,
-                    fp.external_product_id
+                    fp.external_product_id AS linked_external_product_id
              FROM funnel_products fp
              INNER JOIN products p ON p.id = fp.product_id
-             WHERE fp.funnel_id = ? AND fp.external_product_id IN ({$placeholders})",
-            $params
+             WHERE fp.funnel_id = ?
+               AND (
+                   p.external_product_id IN ({$placeholders})
+                   OR (
+                       (p.external_product_id IS NULL OR p.external_product_id = '')
+                       AND fp.external_product_id IN ({$placeholders})
+                   )
+               )",
+            array_merge($params, $externalIds)
         );
 
         return array_map(fn(array $row) => self::applyFunnelLink($row), $rows);
@@ -296,7 +312,7 @@ class Product extends BaseModel
                     fp.sort_order AS linked_sort_order,
                     fp.release_days AS linked_release_days,
                     fp.is_public AS linked_is_public,
-                    fp.external_product_id,
+                    fp.external_product_id AS linked_external_product_id,
                     fp.funnel_role
              FROM funnel_products fp
              INNER JOIN products p ON p.id = fp.product_id
@@ -509,9 +525,9 @@ class Product extends BaseModel
             [
                 $funnelId,
                 $productId,
-                $settings['checkout_url'] ?? ($product['checkout_url'] ?? null),
+                null,
                 $settings['webhook_token'] ?? self::generateWebhookToken(),
-                $settings['external_product_id'] ?? null,
+                null,
                 $settings['funnel_role'] ?? null,
                 $sortOrder,
                 array_key_exists('release_days', $settings) ? $settings['release_days'] : ($product['release_days'] ?? null),
@@ -531,7 +547,7 @@ class Product extends BaseModel
         }
 
         $allowed = array_intersect_key($settings, array_flip([
-            'checkout_url', 'webhook_token', 'sort_order', 'release_days', 'is_public', 'external_product_id', 'funnel_role'
+            'webhook_token', 'sort_order', 'release_days', 'is_public', 'funnel_role'
         ]));
 
         if (empty($allowed)) {
@@ -796,6 +812,7 @@ class Product extends BaseModel
         unset(
             $row['linked_funnel_id'],
             $row['linked_checkout_url'],
+            $row['linked_external_product_id'],
             $row['linked_webhook_token'],
             $row['linked_sort_order'],
             $row['linked_release_days'],

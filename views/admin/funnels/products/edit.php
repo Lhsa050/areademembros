@@ -72,14 +72,14 @@ $lessonFilesMap = \App\Models\LessonFile::getByLessonIds($allLessonIds);
                     <?php endif; ?>
                     <div class="bg-teal-50 border border-teal-200 rounded-lg p-4">
                         <label class="block text-sm font-medium text-teal-700 mb-2">
-                            <i data-lucide="link-2" class="w-4 h-4 inline mr-1"></i> ID Externo (CartPanda)
+                            <i data-lucide="link-2" class="w-4 h-4 inline mr-1"></i> Codigo do produto na CartPanda
                         </label>
                         <input type="text" name="external_product_id" value="<?= e($product['external_product_id'] ?? '') ?>" class="w-full px-4 py-2 border border-teal-300 rounded-lg bg-white" placeholder="Ex: 12345 ou SKU do produto">
-                        <p class="text-xs text-teal-600 mt-1">Informe o <strong>product_id</strong> ou <strong>SKU</strong> deste produto na CartPanda. Usado pelo webhook unificado do funil para identificar automaticamente qual produto foi comprado.</p>
+                        <p class="text-xs text-teal-600 mt-1">Informe o <strong>product_id</strong>, <strong>variant_id</strong> ou <strong>SKU</strong> deste produto na CartPanda. Esse codigo fica fixo no produto e vale em todos os funis.</p>
                     </div>
                     <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
                         <label class="block text-sm font-medium text-amber-700 mb-2">
-                            <i data-lucide="shopping-cart" class="w-4 h-4 inline mr-1"></i> Link de Checkout
+                            <i data-lucide="shopping-cart" class="w-4 h-4 inline mr-1"></i> Link do checkout
                         </label>
                         <input type="url" name="checkout_url" value="<?= e($product['checkout_url'] ?? '') ?>" class="w-full px-4 py-2 border border-amber-300 rounded-lg bg-white" placeholder="https://pay.cartpanda.com/...">
                         <p class="text-xs text-amber-600 mt-1">Ao clicar em produtos bloqueados, o usuário será redirecionado para este link de compra.</p>

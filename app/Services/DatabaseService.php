@@ -241,6 +241,81 @@ class DatabaseService
                 'sql' => "UPDATE products SET funnel_id = NULL WHERE funnel_id IS NOT NULL"
             ],
             [
+                'description' => 'Adicionar webhook unificado em funnels',
+                'check' => "SHOW COLUMNS FROM funnels LIKE 'webhook_token'",
+                'sql' => "ALTER TABLE funnels ADD COLUMN webhook_token VARCHAR(64) NULL UNIQUE AFTER language"
+            ],
+            [
+                'description' => 'Gerar tokens de webhook para funis existentes',
+                'check' => "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM funnels WHERE webhook_token IS NULL OR webhook_token = '')",
+                'sql' => "UPDATE funnels SET webhook_token = CONCAT('funnel_', REPLACE(UUID(), '-', '')) WHERE webhook_token IS NULL OR webhook_token = ''"
+            ],
+            [
+                'description' => 'Adicionar codigo CartPanda global em products',
+                'check' => "SHOW COLUMNS FROM products LIKE 'external_product_id'",
+                'sql' => "ALTER TABLE products ADD COLUMN external_product_id VARCHAR(191) NULL AFTER webhook_token"
+            ],
+            [
+                'description' => 'Adicionar indice do codigo CartPanda global',
+                'check' => "SHOW INDEX FROM products WHERE Key_name = 'idx_external_product_id'",
+                'sql' => "ALTER TABLE products ADD INDEX idx_external_product_id (external_product_id)"
+            ],
+            [
+                'description' => 'Adicionar codigo CartPanda legado em funnel_products',
+                'check' => "SHOW COLUMNS FROM funnel_products LIKE 'external_product_id'",
+                'sql' => "ALTER TABLE funnel_products ADD COLUMN external_product_id VARCHAR(191) NULL AFTER webhook_token"
+            ],
+            [
+                'description' => 'Adicionar indice do codigo CartPanda legado em funnel_products',
+                'check' => "SHOW INDEX FROM funnel_products WHERE Key_name = 'idx_external_product'",
+                'sql' => "ALTER TABLE funnel_products ADD INDEX idx_external_product (funnel_id, external_product_id)"
+            ],
+            [
+                'description' => 'Adicionar papel do produto dentro do funil',
+                'check' => "SHOW COLUMNS FROM funnel_products LIKE 'funnel_role'",
+                'sql' => "ALTER TABLE funnel_products ADD COLUMN funnel_role ENUM('principal', 'bonus', 'orderbump') NULL DEFAULT NULL AFTER external_product_id"
+            ],
+            [
+                'description' => 'Migrar codigo CartPanda dos vinculos para o produto global',
+                'check' => "SELECT 1 WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM funnel_products fp
+                    INNER JOIN products p ON p.id = fp.product_id
+                    WHERE fp.external_product_id IS NOT NULL
+                      AND fp.external_product_id <> ''
+                      AND (p.external_product_id IS NULL OR p.external_product_id = '')
+                )",
+                'sql' => "UPDATE products p
+                    INNER JOIN (
+                        SELECT product_id, MIN(external_product_id) AS external_product_id
+                        FROM funnel_products
+                        WHERE external_product_id IS NOT NULL AND external_product_id <> ''
+                        GROUP BY product_id
+                    ) fp ON fp.product_id = p.id
+                    SET p.external_product_id = fp.external_product_id
+                    WHERE p.external_product_id IS NULL OR p.external_product_id = ''"
+            ],
+            [
+                'description' => 'Migrar checkout dos vinculos para o produto global',
+                'check' => "SELECT 1 WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM funnel_products fp
+                    INNER JOIN products p ON p.id = fp.product_id
+                    WHERE fp.checkout_url IS NOT NULL
+                      AND fp.checkout_url <> ''
+                      AND (p.checkout_url IS NULL OR p.checkout_url = '')
+                )",
+                'sql' => "UPDATE products p
+                    INNER JOIN (
+                        SELECT product_id, MIN(checkout_url) AS checkout_url
+                        FROM funnel_products
+                        WHERE checkout_url IS NOT NULL AND checkout_url <> ''
+                        GROUP BY product_id
+                    ) fp ON fp.product_id = p.id
+                    SET p.checkout_url = fp.checkout_url
+                    WHERE p.checkout_url IS NULL OR p.checkout_url = ''"
+            ],
+            [
                 'description' => 'Adicionar file_type em product_files',
                 'check' => "SHOW COLUMNS FROM product_files LIKE 'file_type'",
                 'sql' => "ALTER TABLE product_files ADD COLUMN file_type ENUM('upload','link') NOT NULL DEFAULT 'upload' AFTER file"

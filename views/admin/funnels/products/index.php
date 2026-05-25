@@ -85,7 +85,13 @@ ob_start();
             <?php if (!empty($product['external_product_id'])): ?>
             <div class="flex items-center gap-1 text-[10px] text-teal-600">
                 <i data-lucide="link-2" class="w-3 h-3 flex-shrink-0"></i>
-                <span>ID Externo: <strong><?= e($product['external_product_id']) ?></strong></span>
+                <span>CartPanda: <strong><?= e($product['external_product_id']) ?></strong></span>
+            </div>
+            <?php endif; ?>
+            <?php if (!empty($product['checkout_url'])): ?>
+            <div class="flex items-center gap-1 text-[10px] text-amber-600">
+                <i data-lucide="shopping-cart" class="w-3 h-3 flex-shrink-0"></i>
+                <span>Checkout configurado no produto global</span>
             </div>
             <?php endif; ?>
             <?php if (!empty($product['is_public'])): ?>

@@ -744,7 +744,7 @@ class WebhookController
 
     /**
      * Processa webhook unificado CartPanda.
-     * Extrai line_items e faz match com external_product_id dos produtos do funil.
+     * Extrai line_items e faz match com o codigo CartPanda global dos produtos do funil.
      */
     private function processFunnelCartPanda(array $payload, array $funnel, int $logId): void
     {
@@ -906,12 +906,12 @@ class WebhookController
 
     /**
      * Extrai line_items do payload CartPanda e faz match com produtos do funil
-     * via external_product_id.
+     * via external_product_id global do produto.
      * 
      * Tenta match por:
-     * 1. product_id do line_item -> external_product_id do funnel_product
-     * 2. variant_id do line_item -> external_product_id
-     * 3. sku do line_item -> external_product_id
+     * 1. product_id do line_item -> products.external_product_id
+     * 2. variant_id do line_item -> products.external_product_id
+     * 3. sku do line_item -> products.external_product_id
      * 4. name do line_item -> título do produto (fallback fuzzy)
      */
     private function matchLineItemsToProducts(array $order, int $funnelId): array
@@ -950,7 +950,7 @@ class WebhookController
         $matchedProducts = [];
         $matchedIds = []; // Evita duplicatas
 
-        // 1. Match por external_product_id do vínculo funnel_products
+        // 1. Match pelo codigo CartPanda global do produto vinculado ao funil
         if (!empty($candidates)) {
             $products = Product::findAllByExternalIdsInFunnel(array_keys($candidates), $funnelId);
             foreach ($products as $product) {
@@ -961,7 +961,7 @@ class WebhookController
             }
         }
 
-        // 2. Match por external_product_id global do produto (tabela products)
+        // 2. Fallback em memoria para payloads com variacoes de tipo/espacos
         if (!empty($candidates)) {
             $allFunnelProducts = $allFunnelProducts ?? Product::getByFunnel($funnelId);
             foreach ($allFunnelProducts as $product) {

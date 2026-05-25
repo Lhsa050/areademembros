@@ -35,7 +35,8 @@ class ProductController
         if ($search !== '') {
             $products = array_values(array_filter($products, function (array $product) use ($search): bool {
                 return stripos((string) ($product['title'] ?? ''), $search) !== false
-                    || stripos((string) ($product['description'] ?? ''), $search) !== false;
+                    || stripos((string) ($product['description'] ?? ''), $search) !== false
+                    || stripos((string) ($product['external_product_id'] ?? ''), $search) !== false;
             }));
         }
 

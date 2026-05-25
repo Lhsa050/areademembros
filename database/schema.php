@@ -106,7 +106,8 @@ return [
             INDEX idx_funnel (funnel_id),
             INDEX idx_type (type),
             INDEX idx_sort (sort_order),
-            INDEX idx_webhook_token (webhook_token)
+            INDEX idx_webhook_token (webhook_token),
+            INDEX idx_external_product_id (external_product_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ",
 

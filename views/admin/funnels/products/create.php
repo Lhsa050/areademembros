@@ -44,7 +44,7 @@ ob_start();
 
                 <div id="available-products-list" class="space-y-3 max-w-full overflow-hidden">
                     <?php foreach ($availableProducts as $product): ?>
-                    <?php $searchText = strtolower(($product['title'] ?? '') . ' ' . ($product['description'] ?? '')); ?>
+                    <?php $searchText = strtolower(($product['title'] ?? '') . ' ' . ($product['description'] ?? '') . ' ' . ($product['external_product_id'] ?? '')); ?>
                     <label class="product-option bg-white rounded-xl shadow-sm border flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 cursor-pointer hover:border-blue-300 transition max-w-full overflow-hidden" data-search="<?= e($searchText) ?>" data-type="<?= e($product['type']) ?>">
                         <input type="checkbox" name="product_ids[]" value="<?= (int) $product['id'] ?>" class="product-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0">
 
@@ -71,6 +71,22 @@ ob_start();
                                 <?php endif; ?>
                             </div>
                             <p class="text-xs text-gray-500 truncate mb-1"><?= e($product['description']) ?></p>
+                            <?php if (!empty($product['external_product_id']) || !empty($product['checkout_url'])): ?>
+                            <div class="flex flex-wrap items-center gap-2 mb-1 text-[10px]">
+                                <?php if (!empty($product['external_product_id'])): ?>
+                                    <span class="inline-flex items-center gap-1 text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full">
+                                        <i data-lucide="link-2" class="w-3 h-3"></i>
+                                        CartPanda: <?= e($product['external_product_id']) ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if (!empty($product['checkout_url'])): ?>
+                                    <span class="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+                                        <i data-lucide="shopping-cart" class="w-3 h-3"></i>
+                                        Checkout
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
                             <div class="flex items-center gap-1 text-[10px] text-gray-400 min-w-0 max-w-full overflow-hidden">
                                 <i data-lucide="git-branch" class="w-3 h-3 flex-shrink-0"></i>
                                 <span><?= (int) ($product['funnel_count'] ?? 0) ?> funil<?= (int) ($product['funnel_count'] ?? 0) === 1 ? '' : 's' ?></span>
@@ -167,18 +183,18 @@ ob_start();
 
             <div class="bg-teal-50 border border-teal-200 rounded-lg p-4">
                 <label class="block text-sm font-medium text-teal-700 mb-2">
-                    <i data-lucide="link-2" class="w-4 h-4 inline mr-1"></i> ID Externo (CartPanda)
+                    <i data-lucide="link-2" class="w-4 h-4 inline mr-1"></i> Codigo do produto na CartPanda
                 </label>
                 <input type="text" name="external_product_id" class="w-full px-4 py-2 border border-teal-300 rounded-lg bg-white" placeholder="Ex: 12345 ou SKU do produto">
-                <p class="text-xs text-teal-600 mt-1">Informe o <strong>product_id</strong> ou <strong>SKU</strong> na CartPanda. Fica vinculado ao produto globalmente.</p>
+                <p class="text-xs text-teal-600 mt-1">Informe o <strong>product_id</strong>, <strong>variant_id</strong> ou <strong>SKU</strong> na CartPanda. Fica fixo no produto global.</p>
             </div>
 
             <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <label class="block text-sm font-medium text-amber-700 mb-2">
-                    <i data-lucide="shopping-cart" class="w-4 h-4 inline mr-1"></i> Link de Checkout
+                    <i data-lucide="shopping-cart" class="w-4 h-4 inline mr-1"></i> Link do checkout
                 </label>
                 <input type="url" name="checkout_url" class="w-full px-4 py-2 border border-amber-300 rounded-lg bg-white" placeholder="https://pay.cartpanda.com/...">
-                <p class="text-xs text-amber-600 mt-1">Produtos bloqueados redirecionam para este link. Fica vinculado ao produto globalmente.</p>
+                <p class="text-xs text-amber-600 mt-1">Use principalmente quando este produto for vendido como order bump ou compra avulsa. Fica fixo no produto global.</p>
             </div>
 
             <div id="new-pdf-upload" class="hidden border border-green-100 bg-green-50/40 rounded-lg p-4 space-y-4">

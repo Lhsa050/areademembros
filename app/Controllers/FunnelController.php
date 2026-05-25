@@ -633,7 +633,8 @@ class FunnelController
                 'webhook_token' => Product::generateWebhookToken(),
                 'sort_order' => $product['sort_order'],
                 'release_days' => $product['release_days'] ?? null,
-                'is_public' => !empty($product['is_public']) ? 1 : 0
+                'is_public' => !empty($product['is_public']) ? 1 : 0,
+                'funnel_role' => $product['funnel_role'] ?? null
             ]);
         }
 
@@ -694,6 +695,7 @@ class FunnelController
             'sort_order' => $newSortOrder,
             'release_days' => $product['release_days'] ?? null,
             'is_public' => !empty($product['is_public']) ? 1 : 0,
+            'funnel_role' => $product['funnel_role'] ?? null,
         ]);
 
         // Duplica arquivos do produto

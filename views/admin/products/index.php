@@ -88,6 +88,22 @@ ob_start();
                 <?php endif; ?>
             </div>
             <p class="text-xs text-gray-500 truncate mb-1"><?= e($product['description']) ?></p>
+            <?php if (!empty($product['external_product_id']) || !empty($product['checkout_url'])): ?>
+            <div class="flex flex-wrap items-center gap-2 mb-1 text-[10px]">
+                <?php if (!empty($product['external_product_id'])): ?>
+                    <span class="inline-flex items-center gap-1 text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full">
+                        <i data-lucide="link-2" class="w-3 h-3"></i>
+                        CartPanda: <?= e($product['external_product_id']) ?>
+                    </span>
+                <?php endif; ?>
+                <?php if (!empty($product['checkout_url'])): ?>
+                    <span class="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+                        <i data-lucide="shopping-cart" class="w-3 h-3"></i>
+                        Checkout
+                    </span>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
             <div class="flex items-center gap-1 text-[10px] text-gray-400 min-w-0 max-w-full overflow-hidden">
                 <i data-lucide="git-branch" class="w-3 h-3 flex-shrink-0"></i>
                 <?php if (!empty($product['funnel_count'])): ?>
