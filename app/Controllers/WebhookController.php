@@ -797,7 +797,7 @@ class WebhookController
         }
 
         $funnelId = (int) $funnel['id'];
-        $productGroups = $this->resolveCartPandaProductGroups($order, $funnelId);
+        $productGroups = $this->resolveCartPandaProductGroups($order, $funnelId, null, true);
         $matchedProducts = $productGroups['access'];
         $purchasedProducts = $productGroups['purchased'];
 
@@ -928,7 +928,12 @@ class WebhookController
         }
     }
 
-    private function resolveCartPandaProductGroups(array $order, int $funnelId, ?array $fallbackProduct = null): array
+    private function resolveCartPandaProductGroups(
+        array $order,
+        int $funnelId,
+        ?array $fallbackProduct = null,
+        bool $forceCoreBundle = false
+    ): array
     {
         $purchasedProducts = $this->matchLineItemsToProducts($order, $funnelId);
 
@@ -940,18 +945,18 @@ class WebhookController
 
         return [
             'purchased' => $purchasedProducts,
-            'access' => $this->expandCartPandaAccessProducts($purchasedProducts, $funnelId),
+            'access' => $this->expandCartPandaAccessProducts($purchasedProducts, $funnelId, $forceCoreBundle),
         ];
     }
 
-    private function expandCartPandaAccessProducts(array $purchasedProducts, int $funnelId): array
+    private function expandCartPandaAccessProducts(array $purchasedProducts, int $funnelId, bool $forceCoreBundle = false): array
     {
-        if (empty($purchasedProducts)) {
+        if (empty($purchasedProducts) && !$forceCoreBundle) {
             return [];
         }
 
         $accessProducts = $purchasedProducts;
-        $isCorePurchase = false;
+        $isCorePurchase = $forceCoreBundle;
 
         foreach ($purchasedProducts as $product) {
             if ($this->cartPandaPurchaseGrantsCoreBundle($product)) {
@@ -961,7 +966,7 @@ class WebhookController
         }
 
         if ($isCorePurchase) {
-            $accessProducts = array_merge($accessProducts, Product::getByRoleInFunnel($funnelId, ['principal', 'bonus']));
+            $accessProducts = array_merge($accessProducts, $this->cartPandaCoreBundleProducts($funnelId));
         }
 
         return $this->uniqueProducts($accessProducts);
@@ -972,6 +977,23 @@ class WebhookController
         $role = strtolower(trim((string) ($product['funnel_role'] ?? '')));
 
         return $role !== 'orderbump';
+    }
+
+    private function cartPandaCoreBundleProducts(int $funnelId): array
+    {
+        $coreProducts = Product::getByRoleInFunnel($funnelId, ['principal', 'bonus']);
+        if (!empty($coreProducts)) {
+            return $coreProducts;
+        }
+
+        $fallbackProducts = [];
+        foreach (Product::getByFunnel($funnelId) as $product) {
+            if (($product['funnel_role'] ?? '') !== 'orderbump') {
+                $fallbackProducts[] = $product;
+            }
+        }
+
+        return $fallbackProducts;
     }
 
     private function uniqueProducts(array $products): array
