@@ -6,4 +6,4 @@
  * NÃO EDITAR MANUALMENTE — é atualizado pelo processo de update.
  */
 
-define('APP_VERSION', '1.6.23');
+define('APP_VERSION', '1.6.24');

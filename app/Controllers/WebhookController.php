@@ -932,8 +932,8 @@ class WebhookController
     {
         $purchasedProducts = $this->matchLineItemsToProducts($order, $funnelId);
 
-        if (empty($purchasedProducts) && $fallbackProduct) {
-            $purchasedProducts = [$fallbackProduct];
+        if ($fallbackProduct) {
+            $purchasedProducts[] = $fallbackProduct;
         }
 
         $purchasedProducts = $this->uniqueProducts($purchasedProducts);
@@ -951,31 +951,27 @@ class WebhookController
         }
 
         $accessProducts = $purchasedProducts;
-        $grantsBonus = false;
+        $isCorePurchase = false;
 
         foreach ($purchasedProducts as $product) {
-            if ($this->cartPandaPurchaseGrantsBonuses($product)) {
-                $grantsBonus = true;
+            if ($this->cartPandaPurchaseGrantsCoreBundle($product)) {
+                $isCorePurchase = true;
                 break;
             }
         }
 
-        if ($grantsBonus) {
-            $accessProducts = array_merge($accessProducts, Product::getByRoleInFunnel($funnelId, ['bonus']));
+        if ($isCorePurchase) {
+            $accessProducts = array_merge($accessProducts, Product::getByRoleInFunnel($funnelId, ['principal', 'bonus']));
         }
 
         return $this->uniqueProducts($accessProducts);
     }
 
-    private function cartPandaPurchaseGrantsBonuses(array $product): bool
+    private function cartPandaPurchaseGrantsCoreBundle(array $product): bool
     {
         $role = strtolower(trim((string) ($product['funnel_role'] ?? '')));
 
-        if ($role === 'orderbump' || $role === 'bonus') {
-            return false;
-        }
-
-        return $role === 'principal' || $role === '';
+        return $role !== 'orderbump';
     }
 
     private function uniqueProducts(array $products): array
