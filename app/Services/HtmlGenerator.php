@@ -163,7 +163,7 @@ class HtmlGenerator
                 'descricao' => $product['description'] ?? '',
                 'img' => $imagePath ? ($baseUrl . $imagePath) : 'https://placehold.co/800x600/1a1a1a/d4af37?text=Produto',
                 'arquivo' => $filePath ? ($baseUrl . $filePath) : '',
-                'checkoutUrl' => $product['checkout_url'] ?? '',
+                'checkoutUrl' => \tracked_checkout_url($product['checkout_url'] ?? ''),
                 'publico' => !empty($product['is_public']),
                 'niveis' => $productAccessLevels[$productId] ?? [], // níveis que têm acesso
             ];

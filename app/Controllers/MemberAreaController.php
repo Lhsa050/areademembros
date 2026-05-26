@@ -451,7 +451,7 @@ class MemberAreaController
                     'title' => $offer['title'],
                     'description' => $offer['description'],
                     'image' => $offer['image'] ? url($offer['image']) : null,
-                    'checkout_url' => $offer['checkout_url'],
+                    'checkout_url' => tracked_checkout_url($offer['checkout_url'] ?? ''),
                     'show_as_popup' => !empty($offer['show_as_popup'])
                 ];
             }

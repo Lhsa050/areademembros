@@ -42,6 +42,60 @@ function asset(string $path): string
 }
 
 /**
+ * Adiciona a UTM padrao aos links de checkout exibidos para membros.
+ */
+function tracked_checkout_url(?string $checkoutUrl): string
+{
+    $checkoutUrl = trim((string) $checkoutUrl);
+    if ($checkoutUrl === '' || $checkoutUrl === '#') {
+        return $checkoutUrl;
+    }
+
+    $parts = parse_url($checkoutUrl);
+    if ($parts === false) {
+        return $checkoutUrl;
+    }
+
+    $scheme = strtolower($parts['scheme'] ?? '');
+    if ($scheme !== '' && !in_array($scheme, ['http', 'https'], true)) {
+        return $checkoutUrl;
+    }
+
+    $query = [];
+    if (!empty($parts['query'])) {
+        parse_str($parts['query'], $query);
+    }
+    $query['utm_source'] = 'areademembros';
+
+    $rebuilt = '';
+    if (isset($parts['scheme'])) {
+        $rebuilt .= $parts['scheme'] . '://';
+    } elseif (str_starts_with($checkoutUrl, '//')) {
+        $rebuilt .= '//';
+    }
+    if (isset($parts['user'])) {
+        $rebuilt .= $parts['user'];
+        if (isset($parts['pass'])) {
+            $rebuilt .= ':' . $parts['pass'];
+        }
+        $rebuilt .= '@';
+    }
+    if (isset($parts['host'])) {
+        $rebuilt .= $parts['host'];
+    }
+    if (isset($parts['port'])) {
+        $rebuilt .= ':' . $parts['port'];
+    }
+    $rebuilt .= $parts['path'] ?? '';
+    $rebuilt .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    if (isset($parts['fragment'])) {
+        $rebuilt .= '#' . $parts['fragment'];
+    }
+
+    return $rebuilt;
+}
+
+/**
  * Renderiza uma view
  */
 function view(string $path, array $data = []): void
